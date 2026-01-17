@@ -26,6 +26,19 @@ enum class MessageType : uint8_t {
     TRADE
 };
 
+static inline uint64_t htond(double d) {
+    uint64_t x;
+    std::memcpy(&x, &d, sizeof(x));
+    return htobe64(x);
+}
+
+static inline double ntohd(uint64_t x) {
+    x = be64toh(x);
+    double d;
+    std::memcpy(&d, &x, sizeof(d));
+    return d;
+}
+
 // static ExchangeSimulator* g_simulator = nullptr;
 
 // static void signal_handler(int sig) {
@@ -33,7 +46,7 @@ enum class MessageType : uint8_t {
 //         g_simulator->request_shutdown();
 //     }
 // }
-
+#pragma pack(push, 1)
 struct MarketMessage {
     MessageType type;
     uint16_t symbol_id;
@@ -54,11 +67,36 @@ struct MarketMessage {
             bool aggressor_buy;
         } trade;
     };
-    inline static std::atomic<uint64_t> global_sequence;
+    std::atomic<uint64_t> global_sequence;
+
+    MarketMessage() = default;
+
+    // Copy constructor
+    MarketMessage(const MarketMessage& other) {
+        *this = other;
+    }
+
+    // Copy assignment
+    MarketMessage& operator=(const MarketMessage& other) {
+        if (this == &other) return *this;
+
+        type         = other.type;
+        symbol_id    = other.symbol_id;
+        sequence     = other.sequence;
+        timestamp_ns = other.timestamp_ns;
+
+        if (type == MessageType::QUOTE) {
+            quote = other.quote;
+        } else {
+            trade = other.trade;
+        }
+
+        return *this;
+    }
 
     void assignSequence() {
-        global_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
-        std::cout<<" global_sequence :"<<global_sequence;
+        sequence = global_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+        // std::cout<<" global_sequence :"<<global_sequence;
     }
     void printinfoquote(){
         std::cout<<"-------------------------------------------------------------------------------\n";
@@ -78,6 +116,7 @@ struct MarketMessage {
 
     }
 };
+#pragma pack(pop)
 
 
 struct ClientState {
@@ -402,6 +441,18 @@ class ExchangeSimulator{
         msg.quote.bid_qty = Random_Quote_Qty(temp_symbolData);
         msg.quote.ask_qty = Random_Quote_Qty(temp_symbolData);
         msg.assignSequence();
+
+
+        msg.symbol_id   = htons(msg.symbol_id);
+        msg.sequence    = htobe64(msg.sequence);
+        msg.timestamp_ns = htobe64(msg.timestamp_ns);
+
+        uint64_t bp = htond(msg.quote.bid_price);
+        uint64_t ap = htond(msg.quote.ask_price);
+        std::memcpy(&msg.quote.bid_price, &bp, sizeof(bp));
+        std::memcpy(&msg.quote.ask_price, &ap, sizeof(ap));
+
+
         // msg.printinfoquote();
         broadcast_message(msg);
     }
@@ -468,6 +519,11 @@ class ExchangeSimulator{
         msg.trade.trade_price = aggressor_buy ? temp_symbolData.st_askPrice : temp_symbolData.st_bidPrice;
 
         msg.trade.trade_qty = Random_Trade_Qty(temp_symbolData);
+
+        msg.symbol_id   = htons(msg.symbol_id);
+        msg.sequence    = htobe64(msg.sequence);
+        msg.timestamp_ns = htobe64(msg.timestamp_ns);
+
         msg.assignSequence();
         // msg.printinfotrade();
         broadcast_message(msg);
