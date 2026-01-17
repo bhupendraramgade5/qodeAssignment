@@ -3,26 +3,30 @@
 
 #include <cstddef>
 #include <cstdint>
-#include "feed_handler.hpp"
+#include "exchange_simulator.hpp"
 
-struct MarketMessage;   // forward declaration
+struct MarketMessage;  // still comes from exchange_simulator.hpp
 
-// class FeedHandler;      // forward declaration
+enum class ParseStatus {
+    OK,
+    INCOMPLETE,
+    MALFORMED
+};
+
+struct ParseResult {
+    ParseStatus status;
+    size_t bytes_consumed;
+    MarketMessage message;
+};
 
 class Parser {
 public:
-    explicit Parser(FeedHandler* handler);
-    // void on_message(const MarketMessage& wire_msg);
-    void feed(const uint8_t* data, size_t len);
+    Parser() = default;
+
+    // Stateless parse
+    ParseResult parse(const uint8_t* data, size_t len);
 
 private:
-    void try_parse();
-    void emit(MarketMessage& msg);
-
-    FeedHandler* feed_handler_{nullptr};
-    std::vector<uint8_t> buffer_;
-    size_t used_{0};
-
     uint64_t last_sequence_{0};
 };
 
