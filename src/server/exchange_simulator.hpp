@@ -1,6 +1,6 @@
 #ifndef EXCHANGE_SIMULATOR_HPP
 #define EXCHANGE_SIMULATOR_HPP
-
+#include <netinet/tcp.h>
 #include <iostream>
 #include <cstdint>
 #include <array>
@@ -18,11 +18,21 @@
 #include <unordered_set>
 #include <arpa/inet.h>
 #include <atomic>
+#include <unordered_map>
+#include <signal.h>
 
 enum class MessageType : uint8_t {
     QUOTE,
     TRADE
 };
+
+// static ExchangeSimulator* g_simulator = nullptr;
+
+// static void signal_handler(int sig) {
+//     if (g_simulator) {
+//         g_simulator->request_shutdown();
+//     }
+// }
 
 struct MarketMessage {
     MessageType type;
@@ -70,6 +80,15 @@ struct MarketMessage {
 };
 
 
+struct ClientState {
+    std::vector<uint8_t> recv_buffer;
+    std::unordered_set<uint16_t> subscriptions;
+};
+
+// std::unordered_map<int, ClientState> m_client_states;
+;
+
+
 struct SymbolData{
     uint16_t st_symbolID;
 
@@ -109,6 +128,11 @@ class ExchangeSimulator{
     public:
     ExchangeSimulator(uint16_t port, size_t symbols = 100):m_port(port),m_activeSymbolCounts(symbols){
         m_activeSymbols.reserve(m_activeSymbolCounts);
+    }
+    static void SignalHandler(int) {
+        if (s_instance) {
+            s_instance->request_shutdown();
+        }
     }
 
     void InitialiseSymbols(const std::unique_ptr<ConfigManager>& cfg){
@@ -154,6 +178,24 @@ class ExchangeSimulator{
     //start accepting connections 
     //So create a single instance of the epoll which the clients are going to connect
     void start(){
+        // ---- PIN THREAD TO A CORE ----
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(2, &cpuset);  // choose core ID (0-based)
+
+        int rc = pthread_setaffinity_np(
+            pthread_self(),
+            sizeof(cpu_set_t),
+            &cpuset
+        );
+
+        if (rc != 0) {
+            perror("pthread_setaffinity_np");
+        }
+        s_instance = this;
+
+        signal(SIGINT,  ExchangeSimulator::SignalHandler);
+        signal(SIGTERM, ExchangeSimulator::SignalHandler);
 
         m_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -207,7 +249,8 @@ class ExchangeSimulator{
         }
 
         epoll_event ev{};
-        ev.events = EPOLLIN;
+        // ev.events = EPOLLIN;
+        ev.events = EPOLLIN | EPOLLET;
         ev.data.fd = m_listen_fd;
 
 
@@ -225,8 +268,10 @@ class ExchangeSimulator{
         m_start_time_ns = GetTime_ns();
         m_end_time_ns   = m_start_time_ns + m_runDurationSec * 1'000'000'000ULL;
         run();
+        for (int fd : clients) close(fd);
+        clients.clear();
+        close(m_epollFD);
         close(m_listen_fd);
-
     }
     //Event based loop meaning every time a  client is connected 
     //this what will provide the data to every connected client as required
@@ -234,13 +279,18 @@ class ExchangeSimulator{
         constexpr int MAX_EVENTS=64;
         epoll_event events[MAX_EVENTS];
 
-        while(m_running){
+        // while(m_running){
+        while (m_running && !m_shutdown_requested.load(std::memory_order_relaxed)) {
+
 
             if (GetTime_ns() >= m_end_time_ns) {
                 m_running = false;
                 break;
             }
-            int n = epoll_wait(m_epollFD, events, MAX_EVENTS, 0);
+            // int n = epoll_wait(m_epollFD, events, MAX_EVENTS, 0);
+            int timeout_ms = std::max<int>(1, m_tick_interval_ns / 1'000'000);
+            int n = epoll_wait(m_epollFD, events, MAX_EVENTS, timeout_ms);
+
             for(int i=0;i<n;i++){
                 int temp_fd = events[i].data.fd;
                 if(temp_fd==m_listen_fd){
@@ -248,10 +298,19 @@ class ExchangeSimulator{
                 }
                 else if(events[i].events &(EPOLLHUP | EPOLLERR)){
                     handle_client_disonnect(temp_fd);
+                    std::cerr << "Client disconnected fd=" << temp_fd << "\n";
                 }
+                else if (events[i].events & EPOLLIN) {
+                    handle_client_read(temp_fd);
+                }
+
             }
             //TICKS GENERATION
             uint64_t time_now = GetTime_ns();
+
+            if (m_shutdown_requested.load(std::memory_order_relaxed)) {
+                break;
+            }
 
             while(time_now-m_last_tick_ns>=m_tick_interval_ns){
                 // m_last_tick_ns=time_now;
@@ -344,7 +403,7 @@ class ExchangeSimulator{
         msg.quote.ask_qty = Random_Quote_Qty(temp_symbolData);
         msg.assignSequence();
         // msg.printinfoquote();
-        // broadcast_message(&msg, sizeof(msg));
+        broadcast_message(msg);
     }
 
     uint32_t Random_Quote_Qty(SymbolData& temp_symbolData){
@@ -411,7 +470,7 @@ class ExchangeSimulator{
         msg.trade.trade_qty = Random_Trade_Qty(temp_symbolData);
         msg.assignSequence();
         // msg.printinfotrade();
-        // broadcast_message(&msg, sizeof(msg));
+        broadcast_message(msg);
     }
 
     bool Random_Bool(SymbolData& s){
@@ -429,42 +488,152 @@ class ExchangeSimulator{
     // void broadcast_message(const void* data, size_t len){
 
     // }
-    void broadcast_message(const void* data, size_t len)
-    {
+    // void broadcast_message(const void* data, size_t len)
+    // {
+    //     for (auto it = clients.begin(); it != clients.end(); ) {
+    //         int fd = *it;
+
+    //         ssize_t sent = send(fd, data, len, MSG_DONTWAIT | MSG_NOSIGNAL);
+
+    //         if (sent < 0) {
+    //             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    //                 // Client is slow → drop it (simple policy)
+    //                 handle_client_disonnect(fd);
+    //                 it = clients.erase(it);
+    //                 continue;
+    //             } else {
+    //                 // Fatal error
+    //                 handle_client_disonnect(fd);
+    //                 it = clients.erase(it);
+    //                 continue;
+    //             }
+    //         }
+
+    //         // Partial send is treated as slow consumer
+    //         if (static_cast<size_t>(sent) != len) {
+    //             handle_client_disonnect(fd);
+    //             it = clients.erase(it);
+    //             continue;
+    //         }
+
+    //         ++it;
+    //     }
+    // }
+
+    void broadcast_message(const MarketMessage& msg){
         for (auto it = clients.begin(); it != clients.end(); ) {
             int fd = *it;
 
-            ssize_t sent = send(fd, data, len, MSG_DONTWAIT | MSG_NOSIGNAL);
-
-            if (sent < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // Client is slow → drop it (simple policy)
-                    handle_client_disonnect(fd);
-                    it = clients.erase(it);
-                    continue;
-                } else {
-                    // Fatal error
-                    handle_client_disonnect(fd);
-                    it = clients.erase(it);
-                    continue;
-                }
-            }
-
-            // Partial send is treated as slow consumer
-            if (static_cast<size_t>(sent) != len) {
-                handle_client_disonnect(fd);
-                it = clients.erase(it);
+            auto cs = m_client_states.find(fd);
+            if (cs == m_client_states.end() ||
+                cs->second.subscriptions.count(msg.symbol_id) == 0)
+            {
+                ++it;
                 continue;
             }
 
-            ++it;
+            ssize_t sent = send(fd, &msg, sizeof(msg),
+                                MSG_DONTWAIT | MSG_NOSIGNAL);
+
+            if (sent != sizeof(msg)) {
+                handle_client_disonnect(fd);
+                m_client_states.erase(fd);
+                it = clients.erase(it);
+            } else {
+                ++it;
+            }
         }
     }
-
 
     // void handle_client_disonnect(int clientFD){
 
     // }
+    void handle_client_read(int client_fd){
+        auto it = m_client_states.find(client_fd);
+        if (it == m_client_states.end()) {
+            handle_client_disonnect(client_fd);
+            return;
+        }
+
+        ClientState& state = it->second;
+        uint8_t buffer[4096];
+
+        while (true) {
+            ssize_t n = recv(client_fd, buffer, sizeof(buffer), 0);
+
+            if (n > 0) {
+                state.recv_buffer.insert(
+                    state.recv_buffer.end(), buffer, buffer + n
+                );
+            }
+            else if (n == 0) {
+                // Clean disconnect
+                handle_client_disonnect(client_fd);
+                m_client_states.erase(client_fd);
+                return;
+            }
+            else {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    break; // ET rule: stop here
+                }
+                // Fatal error
+                handle_client_disonnect(client_fd);
+                m_client_states.erase(client_fd);
+                return;
+            }
+        }
+
+        // ---- PARSING LOOP ----
+        while (true) {
+            if (state.recv_buffer.size() < 3) {
+                return; // Not enough for header + count
+            }
+
+            if (state.recv_buffer[0] != 0xFF) {
+                // Protocol violation
+                handle_client_disonnect(client_fd);
+                m_client_states.erase(client_fd);
+                return;
+            }
+
+            uint16_t count;
+            std::memcpy(&count, &state.recv_buffer[1], sizeof(uint16_t));
+            count = ntohs(count);
+
+            if (count == 0 || count > 500) {
+                handle_client_disonnect(client_fd);
+                m_client_states.erase(client_fd);
+                return;
+            }
+
+            size_t required = 1 + 2 + count * 2;
+            if (state.recv_buffer.size() < required) {
+                return; // Wait for more data
+            }
+
+            // Parse symbol IDs
+            for (size_t i = 0; i < count; ++i) {
+                uint16_t sym;
+                std::memcpy(
+                    &sym,
+                    &state.recv_buffer[3 + i * 2],
+                    sizeof(uint16_t)
+                );
+                sym = ntohs(sym);
+
+                if (sym >= 1 && sym <= 500) {
+                    state.subscriptions.insert(sym);
+                }
+            }
+
+            // Consume parsed message
+            state.recv_buffer.erase(
+                state.recv_buffer.begin(),
+                state.recv_buffer.begin() + required
+            );
+        }
+    }
+
     void handle_client_disonnect(int clientFD)
     {
         epoll_ctl(m_epollFD, EPOLL_CTL_DEL, clientFD, nullptr);
@@ -483,6 +652,10 @@ class ExchangeSimulator{
 
     void handle_new_connection()
     {
+        if (m_shutdown_requested.load(std::memory_order_relaxed)) {
+            return;
+        }
+
         while (true) {
             sockaddr_in client_addr{};
             socklen_t addr_len = sizeof(client_addr);
@@ -500,6 +673,11 @@ class ExchangeSimulator{
                     break;
                 }
             }
+            int flag = 1;
+            setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+            int rcvbuf = 4 * 1024 * 1024;
+            setsockopt(client_fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 
             // Set non-blocking
             int flags = fcntl(client_fd, F_GETFL, 0);
@@ -511,7 +689,9 @@ class ExchangeSimulator{
 
             // Register with epoll
             epoll_event ev{};
-            ev.events = EPOLLERR | EPOLLHUP;  // read not required (broadcast-only)
+            // ev.events = EPOLLERR | EPOLLHUP;  // read not required (broadcast-only)
+            ev.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLET;
+
             ev.data.fd = client_fd;
 
             if (epoll_ctl(m_epollFD, EPOLL_CTL_ADD, client_fd, &ev) < 0) {
@@ -521,6 +701,7 @@ class ExchangeSimulator{
             }
 
             clients.insert(client_fd);
+            m_client_states.emplace(client_fd, ClientState{});
 
             // Optional logging
             // std::cout << "Client connected: fd=" << client_fd << "\n";
@@ -556,6 +737,11 @@ class ExchangeSimulator{
 
         return temp;
     }
+    public:
+    void request_shutdown() {
+        m_shutdown_requested.store(true, std::memory_order_relaxed);
+    }
+
 
     private:
     //Symbol Generation and Storage
@@ -588,7 +774,9 @@ class ExchangeSimulator{
     uint64_t m_end_time_ns;
     bool m_running;
     uint64_t m_runDurationSec;
-
+    std::atomic<bool> m_shutdown_requested{false};
+    inline static ExchangeSimulator* s_instance = nullptr;
+    std::unordered_map<int, ClientState> m_client_states;
 
 };
 
