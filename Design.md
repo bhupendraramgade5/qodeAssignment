@@ -10,9 +10,9 @@ This document describes the architecture, design decisions, and performance cons
 
 ```
 +----------------------+        TCP (Binary Protocol)        +----------------------+
-|  Exchange Simulator  |  --------------------------------> |     Feed Handler     |
+|  Exchange Simulator  |------------------------------------>|     Feed Handler     |
 |  (Server)            |                                     |  (Client)            |
-|                      | <--------------------------------  |                      |
+|                      | <-----------------------------------|                      |
 |  - Tick Generator    |        Subscription Messages        |  - Parser            |
 |  - Symbol Engine     |                                     |  - Symbol Cache      |
 |  - Broadcast Engine  |                                     |  - Visualizer        |
