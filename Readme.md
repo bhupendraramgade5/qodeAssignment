@@ -176,3 +176,57 @@ LEVEL = INFO
 }
 ```
 <!-- // <\pre> -->
+
+## ▶️ Running the Exchange Simulator
+Basic Usage
+```
+./exchange_simulator config.ini RUN_MODE 
+```
+Supported Command-Line Arguments
+
+| Argument |	Description |
+|----------|-------------|
+| `--config <file>`  |	Path to configuration file (required) |
+<!-- | `--port <port>	`| Override port from config | -->
+<!-- | `--symbols <N>	`| Override number of symbols | -->
+<!-- |` --log-level <level>` |	Logging verbosity | -->
+
+## 📡 Running the Client (Feed Handler)
+
+The client connects to the exchange and subscribes to one or more symbols.
+
+Example Usage
+```
+./feed_handler 
+```
+
+Client Arguments
+```
+NOT IMPLEMENTED
+```
+
+## 🔄 System Data Flow
+### Exchange Simulator
+
+```
+    Generates independent stochastic price processes
+    Produces bid/ask quotes and trades
+    Handles multiple clients using epoll
+```
+
+### Feed Handler
+```text
+    Connects to exchange
+    Requests historical market data
+    Subscribes to live data stream
+    Parses and processes incoming messages
+```
+## 🧠 Design Highlights
+
+```
+    Epoll-based non-blocking I/O
+    Independent price process per symbol
+    Shared protocol via header-only common module
+    Low-latency, scalable architecture
+    Sanitizer-enabled builds (ASAN + UBSAN)
+```
