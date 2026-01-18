@@ -142,3 +142,56 @@ NOT IMPLEMENTED
     Low-latency, scalable architecture
     Sanitizer-enabled builds (ASAN + UBSAN)
 ```
+
+---
+
+## ▶️ Running the Simulation Script
+
+To simplify running the exchange simulator along with multiple feed handlers, a helper script is provided.
+
+This script:
+- Launches the exchange simulator
+- Starts multiple feed handlers
+- Pins each process to specific CPU cores
+- Redirects logs to files
+- Ensures clean shutdown on `Ctrl+C`
+
+### Script Location
+```
+    scripts/run_simulation.sh
+```
+
+### Make the script executable (one-time step):
+
+```bash
+    chmod +x scripts/run_simulation.sh
+```
+
+## What it does
+
+* Starts the exchange simulator on a dedicated CPU core.
+* Launches multiple feed handlers, each pinned to a separate CPU.
+* Redirects logs to scripts/logs/.
+* Stops all processes cleanly on Ctrl+C.
+
+```bash
+    CPU Affinity
+    SIM_CPU=2
+    CLIENT_CPUS=(3 4 5 6)
+```
+
+Adjust CPU IDs based on your system.
+```
+Logs
+scripts/logs/
+ ├── simulator.log
+ ├── feedhandler_cpu3.log
+ ├── feedhandler_cpu4.log
+ ├── feedhandler_cpu5.log
+ └── feedhandler_cpu6.log
+```
+### Run
+```bash 
+    scripts/run_simulation.sh
+```
+
