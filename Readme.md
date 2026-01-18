@@ -80,100 +80,12 @@ cmake --build build -j
 
 The exchange simulator uses a configuration file to define runtime parameters such as:
 ```
-Symbols traded
-Initial price range
-Volatility per symbol
-Tick generation interval
-Session duration
-Network port
-```
-<!-- <pre> -->
-```ini
-{
-    ; ================================
-; Exchange Simulator Configuration
-; ================================
-[SERVER]
-; Number of threads used for non-IO tasks
-THREADS = 4
-SERVER_IP_ADD = 127.0.0.1
-PORT = 9876
-
-; ----------------
-; Exchange settings
-; ----------------
-[EXCHANGE]
-; Total number of symbols to simulate
-SYMBOLS = 100
-
-; Initial price range per symbol (₹)
-PRICEMIN = 100.0
-PRICEMAX = 5000.0
-
-; ----------------
-; Market dynamics
-; ----------------
-[MARKET]
-
-; Drift (μ)
-;  0.0   -> neutral market
-;  0.05  -> bull market
-; -0.05  -> bear market
-DRIFT = 0.0
-
-; Volatility range (σ)
-VOLATILITYMIN = 0.01
-VOLATILITYMAX = 0.06
-
-; Bid-ask spread range (percentage of price)
-; 0.0005 = 0.05%
-; 0.0020 = 0.20%
-SPREADMIN = 0.0005
-SPREADMAX = 0.0020
-
-;----------------
-; Tick generation
-; ----------------
-[TICKS] 
-; Tick rate range (messages per second)
-; Used to randomly or deterministically resolve runtime rate
-RATEMIN = 10000
-RATEMAX = 500000
-TICKSRATE=300000
-
-; Time delta (dt) in seconds
-; 0.001 = 1 ms
-dT = 0.00001
-m_runDurationSec = 10
-
-; ----------------
-; Message distribution
-; ----------------
-[messages]
-; Quote vs Trade distribution
-; Must sum to 1.0
-quote_ratio = 0.70
-trade_ratio = 0.30
-
-; ----------------
-; Run mode configuration
-; ----------------
-[MODE]
-; Default run mode
-; R = Random generation
-; M = Manual (load symbol parameters from file)
-DEFAULT = R
-
-; Manual symbol configuration file (used only if mode = M)
-MANUALFILE = ../configs/ManualSymbols.ini
-
-; ----------------
-; Logging (optional, future-proof)
-; ----------------
-[LOGGING]
-; Levels: TRACE, DEBUG, INFO, WARN, ERROR
-LEVEL = INFO
-}
+    Symbols traded
+    Initial price range
+    Volatility per symbol
+    Tick generation interval
+    Session duration
+    Network port
 ```
 <!-- // <\pre> -->
 
