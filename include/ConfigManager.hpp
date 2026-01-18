@@ -50,8 +50,10 @@ class ConfigManager{
     void LoadParameters(){
         m_numOfThreads = m_ptree.get<int>("SERVER.THREADS", 4);
         m_numOfSymbols = m_ptree.get<int>("EXCHANGE.SYMBOLS", 100);
-
+        m_port = m_ptree.get<int>("SERVER.PORT",9876);
+        m_ipadd = m_ptree.get<std::string>("SERVER.SERVER_IP_ADD", "0.0.0.0");
         m_marketDrift = m_ptree.get<double>("MARKET.DRIFT", 0.0);
+
 
         m_spreadMax = m_ptree.get<double>("MARKET.SPREADMAX",0.0020);
         m_spreadMin=m_ptree.get<double>("MARKET.SPREADMIN", 0.0005);
@@ -163,8 +165,8 @@ class ConfigManager{
 
         double m_spreadMin;
         double m_spreadMax;
-
-        
+        std::string m_ipadd;
+        int m_port;
 
         int m_numOfThreads;
         int m_numOfSymbols;

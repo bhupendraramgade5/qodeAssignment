@@ -3,9 +3,10 @@
 
 #include <cstddef>
 #include <cstdint>
-#include "exchange_simulator.hpp"
+#include "../common/protocol.hpp"
 
-struct MarketMessage;  // still comes from exchange_simulator.hpp
+
+// struct MarketMessage;  // still comes from exchange_simulator.hpp
 
 enum class ParseStatus {
     OK,

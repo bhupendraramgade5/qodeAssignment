@@ -20,11 +20,13 @@
 #include <atomic>
 #include <unordered_map>
 #include <signal.h>
+#include "../common/protocol.hpp"
 
-enum class MessageType : uint8_t {
-    QUOTE,
-    TRADE
-};
+
+// enum class MessageType : uint8_t {
+//     QUOTE,
+//     TRADE
+// };
 
 static inline uint64_t htond(double d) {
     uint64_t x;
@@ -46,78 +48,94 @@ static inline double ntohd(uint64_t x) {
 //         g_simulator->request_shutdown();
 //     }
 // }
-#pragma pack(push, 1)
-struct MarketMessage {
-    MessageType type;
-    uint16_t symbol_id;
-    uint64_t sequence;
-    uint64_t timestamp_ns;
+
+// #pragma pack(push, 1)
+// struct MarketMessage {
+//     MessageType type;
+//     uint16_t symbol_id;
+//     uint64_t sequence;
+//     uint64_t timestamp_ns;
     
-    union {
-        struct {
-            double bid_price;
-            double ask_price;
-            uint32_t bid_qty;
-            uint32_t ask_qty;
-        } quote;
+//     union {
+//         struct {
+//             double bid_price;
+//             double ask_price;
+//             uint32_t bid_qty;
+//             uint32_t ask_qty;
+//         } quote;
 
-        struct {
-            double trade_price;
-            uint32_t trade_qty;
-            bool aggressor_buy;
-        } trade;
-    };
-    std::atomic<uint64_t> global_sequence;
+//         struct {
+//             double trade_price;
+//             uint32_t trade_qty;
+//             bool aggressor_buy;
+//         } trade;
+//     };
+//     std::atomic<uint64_t> global_sequence;
 
-    MarketMessage() = default;
+//     MarketMessage() = default;
 
-    // Copy constructor
-    MarketMessage(const MarketMessage& other) {
-        *this = other;
-    }
+//     // Copy constructor
+//     MarketMessage(const MarketMessage& other) {
+//         *this = other;
+//     }
 
-    // Copy assignment
-    MarketMessage& operator=(const MarketMessage& other) {
-        if (this == &other) return *this;
+//     // Copy assignment
+//     MarketMessage& operator=(const MarketMessage& other) {
+//         if (this == &other) return *this;
 
-        type         = other.type;
-        symbol_id    = other.symbol_id;
-        sequence     = other.sequence;
-        timestamp_ns = other.timestamp_ns;
+//         type         = other.type;
+//         symbol_id    = other.symbol_id;
+//         sequence     = other.sequence;
+//         timestamp_ns = other.timestamp_ns;
 
-        if (type == MessageType::QUOTE) {
-            quote = other.quote;
-        } else {
-            trade = other.trade;
-        }
+//         if (type == MessageType::QUOTE) {
+//             quote = other.quote;
+//         } else {
+//             trade = other.trade;
+//         }
 
-        return *this;
-    }
+//         return *this;
+//     }
+
+//     void assignSequence() {
+//         sequence = global_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+//         // std::cout<<" global_sequence :"<<global_sequence;
+//     }
+//     void printinfoquote(){
+//         std::cout<<"-------------------------------------------------------------------------------\n";
+//         std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
+
+//         "\nQuote :: \nbid_price"<<quote.bid_price<<"\nbid_qty :"<<quote.bid_qty<<"\nask_price :"<<quote.ask_price<<"\nask_qty :" <<quote.ask_qty<<"\nglobal_sequence"<<global_sequence<<"\n";
+
+//         // std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
+//         // "\nTrade :: \ntrade_price"<<trade.trade_price<<" trade_qty :"<<trade.trade_qty<<"\naggressor_buy :"<<trade.aggressor_buy<<"\n";
+//     }
+
+//     void printinfotrade(){
+//         std::cout<<"-------------------------------------------------------------------------------\n";
+//         std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
+//         // std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
+//         "\nTrade :: \ntrade_price"<<trade.trade_price<<"\ntrade_qty :"<<trade.trade_qty<<"\naggressor_buy :"<<trade.aggressor_buy<<"\nglobal_sequence"<<global_sequence<<"\n";
+
+//     }
+// };
+// #pragma pack(pop)
+
+struct ServerMarketMessage {
+    MarketMessage wire;  // PURE protocol struct
+
+    inline static std::atomic<uint64_t> global_sequence{0};
 
     void assignSequence() {
-        sequence = global_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
-        // std::cout<<" global_sequence :"<<global_sequence;
-    }
-    void printinfoquote(){
-        std::cout<<"-------------------------------------------------------------------------------\n";
-        std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
-
-        "\nQuote :: \nbid_price"<<quote.bid_price<<"\nbid_qty :"<<quote.bid_qty<<"\nask_price :"<<quote.ask_price<<"\nask_qty :" <<quote.ask_qty<<"\nglobal_sequence"<<global_sequence<<"\n";
-
-        // std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
-        // "\nTrade :: \ntrade_price"<<trade.trade_price<<" trade_qty :"<<trade.trade_qty<<"\naggressor_buy :"<<trade.aggressor_buy<<"\n";
+        wire.sequence =
+            global_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
     }
 
-    void printinfotrade(){
-        std::cout<<"-------------------------------------------------------------------------------\n";
-        std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
-        // std::cout<<"symbol_id :"<<symbol_id<<"\nsequence :"<<sequence<<"\ntimestamp_ns :"<<timestamp_ns<<
-        "\nTrade :: \ntrade_price"<<trade.trade_price<<"\ntrade_qty :"<<trade.trade_qty<<"\naggressor_buy :"<<trade.aggressor_buy<<"\nglobal_sequence"<<global_sequence<<"\n";
-
+    void print_quote() const {
+        std::cout << "symbol=" << wire.symbol_id
+                  << " seq=" << wire.sequence << "\n";
     }
 };
-#pragma pack(pop)
-
 
 struct ClientState {
     std::vector<uint8_t> recv_buffer;
@@ -179,6 +197,9 @@ class ExchangeSimulator{
         m_scheduler_rng.seed(cfg->m_seed ^ 0xABCDEF);
         m_ticks_per_second = cfg->m_ticksRate;
         m_dt = cfg->m_dt;
+        m_bind_IP = cfg->m_ipadd;
+
+        m_port = cfg->m_port;
         // Prepare uniform distribution ONCE
         m_symbol_dist = std::uniform_int_distribution<size_t>(0, m_activeSymbols.size() - 1);
 
@@ -255,7 +276,7 @@ class ExchangeSimulator{
         addr.sin_family = AF_INET;
         // addr.sin_addr.s_addr = INADDR_ANY;
         addr.sin_port= htons(m_port);
-
+        
         if(m_bind_IP.empty()){
             addr.sin_addr.s_addr = INADDR_ANY;
         }
@@ -336,7 +357,7 @@ class ExchangeSimulator{
                     handle_new_connection();
                 }
                 else if(events[i].events &(EPOLLHUP | EPOLLERR)){
-                    handle_client_disonnect(temp_fd);
+                    handle_client_disconnect(temp_fd);
                     std::cerr << "Client disconnected fd=" << temp_fd << "\n";
                 }
                 else if (events[i].events & EPOLLIN) {
@@ -428,33 +449,32 @@ class ExchangeSimulator{
     }
 
     void BuildAndSendQuote(SymbolData& temp_symbolData) {
-        MarketMessage msg{};
-        msg.type = MessageType::QUOTE;
-        msg.symbol_id = temp_symbolData.st_symbolID;
-        msg.sequence = ++temp_symbolData.st_symbolSequenceNumber;
-        msg.timestamp_ns = GetTime_ns();
 
-        msg.quote.bid_price = temp_symbolData.st_bidPrice;
-        msg.quote.ask_price = temp_symbolData.st_askPrice;
+        ServerMarketMessage msg{};
+        msg.wire.type = MessageType::QUOTE;
+        msg.wire.symbol_id = temp_symbolData.st_symbolID;
+        // msg.wire.sequence  = ++temp_symbolData.st_symbolSequenceNumber;
+        msg.wire.timestamp_ns = GetTime_ns();
 
-        // Random but stable quote sizes
-        msg.quote.bid_qty = Random_Quote_Qty(temp_symbolData);
-        msg.quote.ask_qty = Random_Quote_Qty(temp_symbolData);
+        msg.wire.quote.bid_price = temp_symbolData.st_bidPrice;
+        msg.wire.quote.ask_price = temp_symbolData.st_askPrice;
+        msg.wire.quote.bid_qty   = Random_Quote_Qty(temp_symbolData);
+        msg.wire.quote.ask_qty   = Random_Quote_Qty(temp_symbolData);
+
         msg.assignSequence();
 
+        uint64_t bp = htond(temp_symbolData.st_bidPrice);
+        uint64_t ap = htond(temp_symbolData.st_askPrice);
+        std::memcpy(&msg.wire.quote.bid_price, &bp, sizeof(bp));
+        std::memcpy(&msg.wire.quote.ask_price, &ap, sizeof(ap));
 
-        msg.symbol_id   = htons(msg.symbol_id);
-        msg.sequence    = htobe64(msg.sequence);
-        msg.timestamp_ns = htobe64(msg.timestamp_ns);
+        /* endian conversion ON wire */
+        // msg.wire.symbol_id    = htons(msg.wire.symbol_id);
+        // msg.wire.sequence     = htobe64(msg.wire.sequence);
+        // msg.wire.timestamp_ns = htobe64(msg.wire.timestamp_ns);
 
-        uint64_t bp = htond(msg.quote.bid_price);
-        uint64_t ap = htond(msg.quote.ask_price);
-        std::memcpy(&msg.quote.bid_price, &bp, sizeof(bp));
-        std::memcpy(&msg.quote.ask_price, &ap, sizeof(ap));
+        broadcast_message(msg.wire);
 
-
-        // msg.printinfoquote();
-        broadcast_message(msg);
     }
 
     uint32_t Random_Quote_Qty(SymbolData& temp_symbolData){
@@ -506,27 +526,27 @@ class ExchangeSimulator{
     }
 
     void BuildAndSendTrade(SymbolData& temp_symbolData) {
-        MarketMessage msg{};
-        msg.type = MessageType::TRADE;
-        msg.symbol_id = temp_symbolData.st_symbolID;
-        msg.sequence = ++temp_symbolData.st_symbolSequenceNumber;
-        msg.timestamp_ns = GetTime_ns();
+        ServerMarketMessage  msg{};
+        msg.wire.type = MessageType::TRADE;
+        msg.wire.symbol_id = temp_symbolData.st_symbolID;
+        // msg.wire.sequence = ++temp_symbolData.st_symbolSequenceNumber;
+        msg.wire.timestamp_ns = GetTime_ns();
 
         // Trade executes at bid or ask
         bool aggressor_buy = Random_Bool(temp_symbolData);
-        msg.trade.aggressor_buy = aggressor_buy;
+        msg.wire.trade.aggressor_buy = aggressor_buy;
 
-        msg.trade.trade_price = aggressor_buy ? temp_symbolData.st_askPrice : temp_symbolData.st_bidPrice;
+        msg.wire.trade.trade_price = aggressor_buy ? temp_symbolData.st_askPrice : temp_symbolData.st_bidPrice;
 
-        msg.trade.trade_qty = Random_Trade_Qty(temp_symbolData);
-
-        msg.symbol_id   = htons(msg.symbol_id);
-        msg.sequence    = htobe64(msg.sequence);
-        msg.timestamp_ns = htobe64(msg.timestamp_ns);
+        msg.wire.trade.trade_qty = Random_Trade_Qty(temp_symbolData);
 
         msg.assignSequence();
-        // msg.printinfotrade();
-        broadcast_message(msg);
+
+        // msg.wire.symbol_id    = htons(msg.wire.symbol_id);
+        // msg.wire.sequence     = htobe64(msg.wire.sequence);
+        // msg.wire.timestamp_ns = htobe64(msg.wire.timestamp_ns);
+
+        broadcast_message(msg.wire);
     }
 
     bool Random_Bool(SymbolData& s){
@@ -541,42 +561,10 @@ class ExchangeSimulator{
         return trade_qty_dist(temp_symbolData.st_rng);
     }
 
-    // void broadcast_message(const void* data, size_t len){
-
-    // }
-    // void broadcast_message(const void* data, size_t len)
-    // {
-    //     for (auto it = clients.begin(); it != clients.end(); ) {
-    //         int fd = *it;
-
-    //         ssize_t sent = send(fd, data, len, MSG_DONTWAIT | MSG_NOSIGNAL);
-
-    //         if (sent < 0) {
-    //             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-    //                 // Client is slow → drop it (simple policy)
-    //                 handle_client_disonnect(fd);
-    //                 it = clients.erase(it);
-    //                 continue;
-    //             } else {
-    //                 // Fatal error
-    //                 handle_client_disonnect(fd);
-    //                 it = clients.erase(it);
-    //                 continue;
-    //             }
-    //         }
-
-    //         // Partial send is treated as slow consumer
-    //         if (static_cast<size_t>(sent) != len) {
-    //             handle_client_disonnect(fd);
-    //             it = clients.erase(it);
-    //             continue;
-    //         }
-
-    //         ++it;
-    //     }
-    // }
-
     void broadcast_message(const MarketMessage& msg){
+        // std::cout << "[SERVER] broadcast called, sym="
+        //   << msg.symbol_id << "\n";
+
         for (auto it = clients.begin(); it != clients.end(); ) {
             int fd = *it;
 
@@ -588,11 +576,33 @@ class ExchangeSimulator{
                 continue;
             }
 
-            ssize_t sent = send(fd, &msg, sizeof(msg),
+            MarketMessage wire = msg;  // copy host → wire
+
+            wire.symbol_id    = htons(wire.symbol_id);
+            wire.sequence     = htobe64(wire.sequence);
+            wire.timestamp_ns = htobe64(wire.timestamp_ns);
+
+            if (wire.type == MessageType::QUOTE) {
+                uint64_t bp = htond(wire.quote.bid_price);
+                uint64_t ap = htond(wire.quote.ask_price);
+                std::memcpy(&wire.quote.bid_price, &bp, sizeof(bp));
+                std::memcpy(&wire.quote.ask_price, &ap, sizeof(ap));
+            } else {
+                uint64_t tp = htond(wire.trade.trade_price);
+                std::memcpy(&wire.trade.trade_price, &tp, sizeof(tp));
+            }
+
+
+            ssize_t sent = send(fd, &msg, sizeof(MarketMessage),
                                 MSG_DONTWAIT | MSG_NOSIGNAL);
+            if (sent <= 0) {
+                std::cout<<"is the problem right here"<<std::endl;
+                handle_client_disconnect(fd);
+            }
+            
 
             if (sent != sizeof(msg)) {
-                handle_client_disonnect(fd);
+                handle_client_disconnect(fd);
                 m_client_states.erase(fd);
                 it = clients.erase(it);
             } else {
@@ -601,13 +611,13 @@ class ExchangeSimulator{
         }
     }
 
-    // void handle_client_disonnect(int clientFD){
+    // void handle_client_disconnect(int clientFD){
 
     // }
     void handle_client_read(int client_fd){
         auto it = m_client_states.find(client_fd);
         if (it == m_client_states.end()) {
-            handle_client_disonnect(client_fd);
+            handle_client_disconnect(client_fd);
             return;
         }
 
@@ -624,7 +634,7 @@ class ExchangeSimulator{
             }
             else if (n == 0) {
                 // Clean disconnect
-                handle_client_disonnect(client_fd);
+                handle_client_disconnect(client_fd);
                 m_client_states.erase(client_fd);
                 return;
             }
@@ -633,7 +643,7 @@ class ExchangeSimulator{
                     break; // ET rule: stop here
                 }
                 // Fatal error
-                handle_client_disonnect(client_fd);
+                handle_client_disconnect(client_fd);
                 m_client_states.erase(client_fd);
                 return;
             }
@@ -647,7 +657,7 @@ class ExchangeSimulator{
 
             if (state.recv_buffer[0] != 0xFF) {
                 // Protocol violation
-                handle_client_disonnect(client_fd);
+                handle_client_disconnect(client_fd);
                 m_client_states.erase(client_fd);
                 return;
             }
@@ -657,7 +667,7 @@ class ExchangeSimulator{
             count = ntohs(count);
 
             if (count == 0 || count > 500) {
-                handle_client_disonnect(client_fd);
+                handle_client_disconnect(client_fd);
                 m_client_states.erase(client_fd);
                 return;
             }
@@ -681,6 +691,9 @@ class ExchangeSimulator{
                     state.subscriptions.insert(sym);
                 }
             }
+        //     std::cout << "[SERVER] Client " << client_fd
+        //   << " subscribed to " << state.subscriptions.size()
+        //   << " symbols\n";
 
             // Consume parsed message
             state.recv_buffer.erase(
@@ -690,12 +703,12 @@ class ExchangeSimulator{
         }
     }
 
-    void handle_client_disonnect(int clientFD)
+    void handle_client_disconnect(int clientFD)
     {
         epoll_ctl(m_epollFD, EPOLL_CTL_DEL, clientFD, nullptr);
         close(clientFD);
 
-        clients.erase(clientFD);
+        // clients.erase(clientFD);
 
         // Optional logging
         // std::cout << "Client disconnected: fd=" << clientFD << "\n";

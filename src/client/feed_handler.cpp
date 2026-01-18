@@ -1,8 +1,8 @@
 #include "feed_handler.hpp"
 
-#include "visualizer.h"
-#include "market_data_socket.h"
-#include "parser.h"
+#include "visualizer.hpp"
+#include "market_data_socket.hpp"
+#include "parser.hpp"
 
 #include <sys/epoll.h>
 #include <unistd.h>
@@ -12,23 +12,64 @@
 #include <chrono>
 #include <atomic>
 #include <mutex>
-
+#include <array>
 // void FeedHandler::on_message(const MarketMessage& msg) {
 //     std::lock_guard<std::mutex> lock(mtx_);
 //     auto& entry = symbols_[msg.symbol_id];
 //     entry.last_msg = msg;
 //     entry.has_data = true;
 // }
+FeedHandler::FeedHandler(const std::string& host, uint16_t port)
+    : stream_buffer_(64 * 1024)
+{
+    if (!socket_.connect_to(host.c_str(), port)) {
+        throw std::runtime_error("Failed to connect to exchange");
+    }
+
+    // ---- SEND SUBSCRIPTION HERE ----
+    std::vector<uint16_t> symbols;
+    for (uint16_t i = 1; i <=100; ++i) {   // or 500, depending on simulator
+        symbols.push_back(i);
+    }
+
+    if (!socket_.send_subscription(symbols)) {
+        throw std::runtime_error("Failed to send subscription");
+    }
+
+    std::cout << "[FeedHandler] Subscription sent (" 
+              << symbols.size() << " symbols)\n";
+}
+
+
+
+// void FeedHandler::on_message(const MarketMessage& msg) {
+//     auto& state = symbols_[msg.symbol_id];
+
+//     uint64_t v = state.version.load(std::memory_order_relaxed);
+//     state.version.store(v + 1, std::memory_order_release); // mark write start (odd)
+
+//     state.data = msg;
+
+//     state.version.store(v + 2, std::memory_order_release); // mark write end (even)
+// }
+
 void FeedHandler::on_message(const MarketMessage& msg) {
+    if (msg.symbol_id >= MAX_SYMBOLS) {
+        // Drop malformed / unexpected symbol
+        return;
+    }
+
     auto& state = symbols_[msg.symbol_id];
 
     uint64_t v = state.version.load(std::memory_order_relaxed);
-    state.version.store(v + 1, std::memory_order_release); // mark write start (odd)
+    state.version.store(v + 1, std::memory_order_release); // write begin (odd)
 
     state.data = msg;
+    // std::cout << "RX symbol=" << msg.symbol_id << "\n";
 
-    state.version.store(v + 2, std::memory_order_release); // mark write end (even)
+    state.version.store(v + 2, std::memory_order_release); // write end (even)
 }
+
 
 // bool FeedHandler::get_latest(uint16_t symbol, MarketMessage& out) {
 //     std::lock_guard<std::mutex> lock(mtx_);
@@ -40,12 +81,33 @@ void FeedHandler::on_message(const MarketMessage& msg) {
 //     return true;
 // }
 
+// bool FeedHandler::get_latest(uint16_t symbol, MarketMessage& out) const {
+//     const auto& state = symbols_[symbol];
+
+//     while (true) {
+//         uint64_t v1 = state.version.load(std::memory_order_acquire);
+//         if (v1 & 1) continue; // writer in progress
+
+//         MarketMessage tmp = state.data;
+
+//         uint64_t v2 = state.version.load(std::memory_order_acquire);
+//         if (v1 == v2) {
+//             out = tmp;
+//             return v2 != 0;
+//         }
+//     }
+// }
+
 bool FeedHandler::get_latest(uint16_t symbol, MarketMessage& out) const {
+    if (symbol >= MAX_SYMBOLS) {
+        return false;
+    }
+
     const auto& state = symbols_[symbol];
 
     while (true) {
         uint64_t v1 = state.version.load(std::memory_order_acquire);
-        if (v1 & 1) continue; // writer in progress
+        if (v1 & 1) continue;
 
         MarketMessage tmp = state.data;
 

@@ -5,10 +5,16 @@
 #include <vector>
 #include <cstdint>
 #include <atomic>
+#include <string>
+#include <array>
 
-#include "parser.h"
-#include "protocol.h"
-#include "market_data_socket.h"
+#include "parser.hpp"
+#include "../common/protocol.hpp"
+#include "market_data_socket.hpp"
+
+// #include "../server/exchange_simulator.hpp"
+// #include "exchange_simulator.hpp"
+
 
 // struct SymbolSnapshot {
 //     MarketMessage last_msg;
@@ -27,6 +33,10 @@ struct StreamBuffer {
 
     StreamBuffer() {
         buffer.reserve(64 * 1024);
+    }
+
+    explicit StreamBuffer(size_t reserve_bytes = 64 * 1024) {
+        buffer.reserve(reserve_bytes);
     }
 
     void append(const uint8_t* data, size_t len) {
@@ -53,6 +63,14 @@ struct StreamBuffer {
 
 class FeedHandler {
 public:
+    uint64_t message_count() const {
+        return messages_.load(std::memory_order_relaxed);
+    }
+
+    uint64_t sequence_gaps() const {
+        return seq_gaps_.load(std::memory_order_relaxed);
+    }
+
     FeedHandler(const std::string& host, uint16_t port);
 
     void run();   // main event loop

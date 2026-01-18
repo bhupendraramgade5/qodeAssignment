@@ -21,12 +21,15 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <vector>
 #include <sys/types.h>   // ssize_t
 
 class MarketDataSocket {
 public:
     MarketDataSocket() = default;
     ~MarketDataSocket();
+
+    bool send_subscription(const std::vector<uint16_t>& symbols);
 
     bool connect_to(const char* host, uint16_t port);
     ssize_t recv_data(void* buf, size_t len);

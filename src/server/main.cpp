@@ -66,7 +66,7 @@ int main(int argc, char* argv[]){
     }
     else{
         //print the error captured while checking the file
-        std::cerr<<"filesystem error(Config): Path doesnot exist ,"<<errConfigFile.message()<<"\n";
+        std::cerr<<"filesystem error(Config): Path doesnot exist ,"<<errConfigFile.message()<<configPath<<"\n";
         //Since Config  Cannot be accessed the Program should exit with a status Code 1
         return (FAIL);
     }
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]){
     }
     else if(argv_mode=='R'){
         //Now Run the Random MOODE of application
-        ExchangeSimulator obj_exchangeSimulator(9000, cfg->m_numOfSymbols);
+        ExchangeSimulator obj_exchangeSimulator(9876, cfg->m_numOfSymbols);
         cout<<"Running in the Random Mode"<<"\n";
 
         obj_exchangeSimulator.InitialiseSymbols(std::move(cfg));
